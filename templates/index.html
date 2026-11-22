@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>主页</title>
+    <link rel="stylesheet" href="/static/css/bootstrap-4.5.0.min.css">
+    <style>
+        body, html {
+            margin: 0;
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            margin-top: 80px;
+            max-width: 90%;
+            min-height: 800px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .container table {
+            width: 100%; /* 让表格宽度自适应容器 */
+            table-layout: fixed; /* 固定列宽，均匀分布 */
+            border-collapse: collapse; /* 让表格边框合并，看起来更整洁 */
+        }
+
+        .container th, .container td {
+            border: 1px solid #ddd; /* 添加边框，便于区分列 */
+            padding: 8px; /* 内边距 */
+            text-align: center; /* 文本对齐方式 */
+        }
+        #header {
+            position: absolute;
+            width: 100%;
+            top: 0;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 40px;
+            background: #3f3f3f;
+            color: #ffc;
+            overflow: hidden;
+        }
+
+        #user-tools a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .drop-zone-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone-wrapper {
+            width: 45%;
+        }
+
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            width: 100%;
+            height: 200px;
+            font-family: sans-serif;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .drop-zone--over {
+            border-style: solid;
+        }
+
+        .drop-zone__prompt {
+            color: #0d3c61;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone__input {
+            display: none;
+        }
+
+        .drop-zone__thumb {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #cccccc;
+            background-size: cover;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #000000;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #submitBtn {
+            display: block;
+            margin: 20px auto;
+            width: 200px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <div id="branding" style="display: flex; align-items: center; gap: 20px;">
+            <img src="/static/img/logo.png" alt="" style="max-height: 40px; width: auto;">
+            <span style="font-weight: bold;">风损先知</span>
+        </div>
+        <div id="user-tools">
+            Welcome，<strong>{{ user_name }}</strong>&nbsp;&nbsp;&nbsp;&nbsp;
+            <a href="/logout/">登出</a>&nbsp;&nbsp;&nbsp;&nbsp;
+        </div>
+        <a href="/classify/" id="classify">进行分类</a>
+    </div>
+
+    <div class="container">
+        <form method="post" enctype="multipart/form-data" id="profileForm">
+            {% csrf_token %}
+            <div class="drop-zone-container">
+                <div class="drop-zone-wrapper">
+                    <h4>训练数据集</h4>
+                    <div class="drop-zone">
+                        <span class="drop-zone__prompt">拖放训练数据集文件到这里或点击上传</span>
+                        <input type="file" name="train_csvfile" class="drop-zone__input" id="train_csvfile" accept=".csv">
+                    </div>
+                    <div class="file-name" id="train_file_name">请上传训练数据</div>
+                </div>
+                <div class="drop-zone-wrapper">
+                    <h4>测试数据集</h4>
+                    <div class="drop-zone">
+                        <span class="drop-zone__prompt">拖放测试数据集文件到这里或点击上传</span>
+                        <input type="file" name="test_csvfile" class="drop-zone__input" id="test_csvfile" accept=".csv">
+                    </div>
+                    <div class="file-name" id="test_file_name">请上传测试数据</div>
+                </div>
+            </div>
+            <button id="submitBtn" type="submit" class="btn btn-primary">运 行</button>
+            <div id="progressBarContainer" style="display: none;">
+                <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50;"></div>
+                <div id="progressText">0%</div>
+            </div>
+        </form>
+        <div id="result" style="display: none">
+            <h2>运行结果</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>数据序号</th>
+                        <th class="">D1</th>
+                        <th class="">D2</th>
+                        <th class="">D3</th>
+                        <th class="">D4</th>
+                        <th class="">D5</th>
+                        <th class="">D6</th>
+                        <th class="">D7</th>
+                        <th class="">D8</th>
+                        <th class="">直接经济损失(万元)</th>
+                    </tr>
+                </thead>
+                <tbody id="healthProfileModal_tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/static/js/jquery-3.6.0.min.js"></script>
+    <script>
+        document.querySelectorAll(".drop-zone__input").forEach((inputElement) => {
+            const dropZoneElement = inputElement.closest(".drop-zone");
+            const fileNameElement = dropZoneElement.nextElementSibling;
+
+            dropZoneElement.addEventListener("click", (e) => {
+                inputElement.click();
+            });
+
+            inputElement.addEventListener("change", (e) => {
+                if (inputElement.files.length) {
+                    updateThumbnail(dropZoneElement, inputElement.files[0]);
+                    updateFileName(fileNameElement, inputElement.files[0].name);
+                }
+            });
+
+            dropZoneElement.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropZoneElement.classList.add("drop-zone--over");
+            });
+
+            ["dragleave", "dragend"].forEach((type) => {
+                dropZoneElement.addEventListener(type, (e) => {
+                    dropZoneElement.classList.remove("drop-zone--over");
+                });
+            });
+
+            dropZoneElement.addEventListener("drop", (e) => {
+                e.preventDefault();
+
+                if (e.dataTransfer.files.length) {
+                    inputElement.files = e.dataTransfer.files;
+                    updateThumbnail(dropZoneElement, e.dataTransfer.files[0]);
+                    updateFileName(fileNameElement, e.dataTransfer.files[0].name);
+                }
+
+                dropZoneElement.classList.remove("drop-zone--over");
+            });
+        });
+
+        function updateThumbnail(dropZoneElement, file) {
+            let thumbnailElement = dropZoneElement.querySelector(".drop-zone__thumb");
+
+            if (dropZoneElement.querySelector(".drop-zone__prompt")) {
+                dropZoneElement.querySelector(".drop-zone__prompt").remove();
+            }
+
+            if (!thumbnailElement) {
+                thumbnailElement = document.createElement("div");
+                thumbnailElement.classList.add("drop-zone__thumb");
+                dropZoneElement.appendChild(thumbnailElement);
+            }
+
+            thumbnailElement.textContent = file.name;
+        }
+
+        function updateFileName(fileNameElement, fileName) {
+            fileNameElement.textContent = fileName;
+        }
+
+        var submitBtn = document.getElementById("submitBtn");
+        var eventSource;
+
+        submitBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+
+            var train_csvfile = document.getElementById('train_csvfile').files;
+            var test_csvfile = document.getElementById('test_csvfile').files;
+
+            if (train_csvfile.length === 0 || test_csvfile.length === 0) {
+                alert("请上传训练数据集和测试数据集");
+                return;
+            }
+
+            submitBtn.style.background = 'darkgray';
+            submitBtn.disabled = true;
+
+            document.getElementById('progressBarContainer').style.display = 'block';
+
+            if (eventSource) {
+                eventSource.close();
+            }
+            eventSource = new EventSource("/progress/");
+
+            eventSource.onopen = function(event) {
+                console.log("Connection to server opened.");
+            };
+
+            eventSource.onmessage = function(event) {
+                console.log("Raw event data:", event.data);
+                try {
+                    var data = JSON.parse(event.data);
+                    console.log("Parsed data:", data);
+                    if (data.progress !== undefined) {
+                        console.log("Updating progress:", data.progress);
+                        document.getElementById('progressBar').style.width = data.progress + '%';
+                        document.getElementById('progressText').innerText = data.progress + '%';
+                    }
+                    if (data.result !== undefined) {
+                        console.log("Received final result");
+                        document.getElementById('result').style.display = 'block';
+                        $('#healthProfileModal_tbody').html('');
+                        data.result.forEach(function (value, i) {
+                            var tr = `<tr>
+                                <td>${i+1}</td>
+                                <td>${value[0]}</td>
+                                <td>${value[1]}</td>
+                                <td>${value[2]}</td>
+                                <td>${value[3]}</td>
+                                <td>${value[4]}</td>
+                                <td>${value[5]}</td>
+                                <td>${value[6]}</td>
+                                <td>${value[7]}</td>
+                                <td>${value[8]}</td>
+                            </tr>`;
+                            $('#healthProfileModal_tbody').append(tr);
+                        });
+                        eventSource.close();
+                        document.getElementById('progressBarContainer').style.display = 'none';
+                        submitBtn.style.background = '#007bff';
+                        submitBtn.disabled = false;
+                    }
+                } catch (error) {
+                    console.error("Error parsing event data:", error);
+                }
+            };
+
+            eventSource.onerror = function(error) {
+                console.error("EventSource failed:", error);
+                eventSource.close();
+                submitBtn.style.background = '#007bff';
+                submitBtn.disabled = false;
+            };
+
+            var formData = new FormData(document.getElementById("profileForm"));
+            fetch('/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            }).then(response => response.json())
+              .then(data => {
+                if (data.status !== 'success') {
+                    alert("文件上传失败");
+                    eventSource.close();
+                    submitBtn.style.background = '#007bff';
+                    submitBtn.disabled = false;
+                }
+              })
+              .catch(error => {
+                console.error('Error:', error);
+                alert("发生错误，请稍后重试");
+                eventSource.close();
+                submitBtn.style.background = '#007bff';
+                submitBtn.disabled = false;
+              });
+        });
+    </script>
+</body>
+</html>
